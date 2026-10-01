@@ -1,0 +1,986 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Abyss Snap</title>
+<meta name="description" content="A bioluminescent deep-sea tunnel dodger. Snap your angle to survive the dive.">
+<meta name="theme-color" content="#050b14">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Abyss Snap">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/favicon-32.png" sizes="32x32">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --abyss:#050b14;
+    --cave:#0f2a3d;
+    --bio:#4de8d8;
+    --bio-dim:#1e5a58;
+    --warn:#ffb347;
+    --danger:#ff3860;
+    --ink:#eaf6f6;
+    --ink-dim:#7fa8ac;
+  }
+  *{
+    box-sizing:border-box;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  html,body{
+    margin:0; padding:0; width:100%; height:100%; overflow:hidden;
+    background:var(--abyss); color:var(--ink);
+    font-family:'JetBrains Mono', monospace;
+    touch-action: none;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  #game{
+    position:fixed; inset:0; display:block; width:100%; height:100%;
+    touch-action:none;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  .overlay{
+    position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
+    flex-direction:column; text-align:center; padding:24px;
+    background:radial-gradient(ellipse at 50% 40%, rgba(15,42,61,0.55), rgba(5,11,20,0.92) 70%);
+    backdrop-filter: blur(2px);
+  }
+  .hidden{ display:none !important; }
+
+  h1.title{
+    font-family:'Orbitron', sans-serif;
+    font-weight:800;
+    font-size: clamp(2rem, 8vw, 3.6rem);
+    letter-spacing: 0.12em;
+    margin: 0 0 6px 0;
+    color: var(--ink);
+    text-shadow: 0 0 18px var(--bio), 0 0 46px rgba(77,232,216,0.35);
+  }
+  .eyebrow{
+    font-family:'JetBrains Mono', monospace;
+    letter-spacing:0.35em;
+    font-size:0.72rem;
+    color: var(--bio);
+    text-transform:uppercase;
+    margin-bottom: 14px;
+    opacity:0.85;
+  }
+  p.desc{
+    max-width: 420px;
+    color: var(--ink-dim);
+    font-size: 0.95rem;
+    line-height:1.6;
+    margin: 4px 0 26px 0;
+  }
+  p.desc b{ color: var(--ink); font-weight:600; }
+  p.desc .danger-word{ color: var(--danger); font-weight:600; }
+
+  button.btn{
+    font-family:'Orbitron', sans-serif;
+    font-weight:600;
+    letter-spacing:0.08em;
+    font-size:1rem;
+    padding: 14px 34px;
+    margin: 6px;
+    border-radius: 999px;
+    border: 1.5px solid var(--bio);
+    background: linear-gradient(180deg, rgba(77,232,216,0.16), rgba(77,232,216,0.04));
+    color: var(--ink);
+    cursor:pointer;
+    transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
+    box-shadow: 0 0 16px rgba(77,232,216,0.25);
+  }
+  button.btn:hover{ transform: translateY(-1px); box-shadow: 0 0 26px rgba(77,232,216,0.45); background: linear-gradient(180deg, rgba(77,232,216,0.26), rgba(77,232,216,0.06)); }
+  button.btn:active{ transform: translateY(0px) scale(0.97); }
+  button.btn.secondary{
+    border-color: var(--ink-dim);
+    background: rgba(234,246,246,0.04);
+    box-shadow:none;
+    font-size:0.85rem;
+    padding: 11px 26px;
+  }
+  button.btn.secondary:hover{ box-shadow: 0 0 14px rgba(234,246,246,0.15); }
+
+  .gauge{
+    display:flex; gap: 28px; margin-bottom: 8px;
+  }
+  .gauge .stat{ text-align:center; }
+  .gauge .stat .label{ font-size:0.62rem; letter-spacing:0.25em; color:var(--ink-dim); text-transform:uppercase; }
+  .gauge .stat .value{ font-family:'Orbitron', sans-serif; font-size:1.6rem; font-weight:800; color:var(--ink); text-shadow:0 0 12px rgba(77,232,216,0.4); }
+  .gauge .stat .value.new-best{ color: var(--warn); text-shadow:0 0 14px rgba(255,179,71,0.6); }
+
+  /* HUD during play */
+  #hud{
+    position:fixed; top:0; left:0; right:0; display:flex; justify-content:space-between; align-items:flex-start;
+    padding: 16px 18px; pointer-events:none; z-index:5;
+  }
+  #depthReadout{
+    font-family:'JetBrains Mono', monospace;
+    background: rgba(5,11,20,0.5);
+    border: 1px solid rgba(77,232,216,0.35);
+    border-radius: 10px;
+    padding: 8px 14px;
+    letter-spacing:0.08em;
+    font-size: 0.95rem;
+    color: var(--bio);
+    box-shadow: inset 0 0 10px rgba(77,232,216,0.08);
+  }
+  #depthReadout .unit{ color: var(--ink-dim); font-size:0.7rem; margin-left:4px; }
+  #muteBtn{
+    pointer-events:all;
+    background: rgba(5,11,20,0.5);
+    border: 1px solid rgba(77,232,216,0.35);
+    border-radius: 10px;
+    color: var(--ink);
+    width: 42px; height:38px;
+    font-size: 1.1rem;
+    cursor:pointer;
+  }
+  #muteBtn:hover{ border-color: var(--bio); }
+
+  #warningBanner{
+    position:fixed; top: 64px; left:50%; transform: translateX(-50%);
+    font-family:'Orbitron', sans-serif;
+    letter-spacing:0.2em;
+    font-size:0.85rem;
+    color: var(--warn);
+    background: rgba(5,11,20,0.55);
+    border:1px solid var(--warn);
+    padding: 7px 18px;
+    border-radius: 999px;
+    opacity:0;
+    transition: opacity 0.15s ease;
+    pointer-events:none;
+    z-index:6;
+    text-shadow: 0 0 10px rgba(255,179,71,0.6);
+  }
+  #warningBanner.show{ opacity:1; animation: pulseWarn 0.5s infinite alternate; }
+  @keyframes pulseWarn{ from{ opacity:0.55; } to{ opacity:1; } }
+
+  .footnote{ font-size:0.68rem; color: var(--ink-dim); margin-top: 14px; letter-spacing:0.04em; }
+
+  .control-select{
+    display:flex; gap:12px; margin: 4px 0 22px 0; width:100%; max-width:440px;
+  }
+  .mode-card{
+    flex:1; display:flex; flex-direction:column; align-items:center; gap:8px;
+    padding: 14px 10px 16px 10px;
+    border-radius: 16px;
+    border: 1.5px solid rgba(127,168,172,0.35);
+    background: rgba(234,246,246,0.03);
+    color: var(--ink);
+    cursor:pointer;
+    font-family: inherit;
+    transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
+  }
+  .mode-card:hover{ transform: translateY(-1px); border-color: rgba(77,232,216,0.55); }
+  .mode-card.selected{
+    border-color: var(--bio);
+    background: linear-gradient(180deg, rgba(77,232,216,0.14), rgba(77,232,216,0.03));
+    box-shadow: 0 0 16px rgba(77,232,216,0.28);
+  }
+  .mode-card .mode-name{
+    font-family:'Orbitron', sans-serif; font-weight:800; font-size:0.95rem; letter-spacing:0.12em;
+    color: var(--ink);
+  }
+  .mode-card.selected .mode-name{ color: var(--bio); text-shadow: 0 0 10px rgba(77,232,216,0.5); }
+  .mode-card .mode-desc{
+    font-family:'JetBrains Mono', monospace; font-size:0.68rem; line-height:1.45;
+    color: var(--ink-dim); text-align:center;
+  }
+  .mode-card.selected .mode-desc{ color: var(--ink); }
+  .mode-card .mode-best{
+    font-family:'JetBrains Mono', monospace; font-size:0.62rem; letter-spacing:0.06em;
+    color: var(--bio); opacity:0.8; margin-top:2px;
+  }
+</style>
+</head>
+<body>
+
+<canvas id="game"></canvas>
+
+<div id="hud" class="hidden">
+  <div id="depthReadout">DEPTH <span id="scoreVal">0</span><span class="unit">m</span></div>
+  <button id="muteBtn" title="Mute">🔊</button>
+</div>
+
+<div id="warningBanner">⚠ NARROW PASSAGE ⚠</div>
+
+<div id="startScreen" class="overlay">
+  <div class="eyebrow">Deep Descent · Reflex Dive</div>
+  <h1 class="title">ABYSS SNAP</h1>
+  <p class="desc">
+    You're a bioluminescent drifter, gliding at a steep angle through a living sea cave.
+    The walls breathe and shift, and about <b>1 in 6</b> stretches will suddenly
+    <span class="danger-word">squeeze tight</span> — watch for the amber warning glow before you hit one.
+  </p>
+
+  <div class="control-select" role="group" aria-label="Choose control style">
+    <button class="mode-card" id="modeTapBtn" data-mode="tap">
+      <span class="mode-name">TAP</span>
+      <span class="mode-desc">Tap to switch gravity</span>
+      <span class="mode-best" id="tapBestLabel">Best: 0m</span>
+    </button>
+    <button class="mode-card" id="modeHoldBtn" data-mode="hold">
+      <span class="mode-name">HOLD</span>
+      <span class="mode-desc">Hold to switch gravity</span>
+      <span class="mode-best" id="holdBestLabel">Best: 0m</span>
+    </button>
+  </div>
+
+  <button class="btn" id="startBtn">Begin Dive</button>
+  <div class="footnote">Esc to pause</div>
+</div>
+
+<div id="gameOverScreen" class="overlay hidden">
+  <div class="eyebrow">Dive Ended</div>
+  <h1 class="title" style="font-size:clamp(1.6rem,7vw,2.6rem)">CRUSHED BY THE DEEP</h1>
+  <div class="gauge">
+    <div class="stat">
+      <div class="label">Depth Reached</div>
+      <div class="value" id="finalScore">0</div>
+    </div>
+    <div class="stat">
+      <div class="label" id="bestScoreLabel">Best Distance</div>
+      <div class="value" id="bestScore">0</div>
+    </div>
+  </div>
+  <div>
+    <button class="btn" id="restartBtn">Dive Again</button>
+    <button class="btn secondary" id="menuBtn">Main Menu</button>
+  </div>
+  <div class="footnote">Best distance is saved in this browser</div>
+</div>
+
+<div id="pauseScreen" class="overlay hidden">
+  <div class="eyebrow">Paused</div>
+  <h1 class="title" style="font-size:clamp(1.6rem,7vw,2.4rem)">HOLDING DEPTH</h1>
+  <button class="btn" id="resumeBtn">Resume</button>
+  <button class="btn secondary" id="quitBtn">Main Menu</button>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  // ---------- Canvas setup ----------
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  let W = 0, H = 0, DPR = 1;
+
+  function resize(){
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth;
+    H = window.innerHeight;
+    canvas.width = Math.floor(W * DPR);
+    canvas.height = Math.floor(H * DPR);
+    canvas.style.width = W + 'px';
+    canvas.style.height = H + 'px';
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  // ---------- Audio (synthesized, no external files) ----------
+  let actx = null;
+  let muted = false;
+
+  function ensureAudio(){
+    if(!actx){
+      try{ actx = new (window.AudioContext || window.webkitAudioContext)(); }
+      catch(e){ actx = null; }
+    } else if(actx.state === 'suspended'){
+      actx.resume();
+    }
+  }
+
+  function tone(freq, dur, type, gainStart, opts){
+    if(muted || !actx) return;
+    opts = opts || {};
+    const t0 = actx.currentTime;
+    const osc = actx.createOscillator();
+    const gain = actx.createGain();
+    osc.type = type || 'sine';
+    osc.frequency.setValueAtTime(freq, t0);
+    if(opts.slideTo){
+      osc.frequency.exponentialRampToValueAtTime(Math.max(opts.slideTo,1), t0 + dur);
+    }
+    gain.gain.setValueAtTime(0.0001, t0);
+    gain.gain.exponentialRampToValueAtTime(gainStart, t0 + 0.012);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    osc.connect(gain).connect(actx.destination);
+    osc.start(t0);
+    osc.stop(t0 + dur + 0.02);
+  }
+
+  function playTurn(){ tone(520, 0.09, 'triangle', 0.18, {slideTo:760}); }
+  function playCrash(){
+    if(muted || !actx) return;
+    const t0 = actx.currentTime;
+    // noisy thud via multiple detuned oscillators
+    [110, 82, 60].forEach((f,i)=>{
+      const osc = actx.createOscillator();
+      const gain = actx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(f, t0);
+      osc.frequency.exponentialRampToValueAtTime(f*0.35, t0+0.35);
+      gain.gain.setValueAtTime(0.0001, t0);
+      gain.gain.exponentialRampToValueAtTime(0.22 - i*0.05, t0+0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0+0.4);
+      osc.connect(gain).connect(actx.destination);
+      osc.start(t0); osc.stop(t0+0.45);
+    });
+  }
+  function playMilestone(){
+    tone(660, 0.12, 'sine', 0.16);
+    setTimeout(()=>tone(880, 0.16, 'sine', 0.14), 70);
+  }
+  function playWarning(){
+    tone(340, 0.1, 'square', 0.1);
+    setTimeout(()=>tone(300, 0.12, 'square', 0.09), 130);
+  }
+  function playSqueezePass(){
+    tone(500, 0.08, 'triangle', 0.12);
+    setTimeout(()=>tone(700, 0.1, 'triangle', 0.12), 60);
+    setTimeout(()=>tone(950, 0.14, 'triangle', 0.12), 120);
+  }
+
+  // ---------- Game constants ----------
+  const BALL_X_FRAC = 0.24;
+  const CHUNK_LENGTH = 480;
+  const SQUEEZE_CHANCE = 0.17;
+  const MARGIN = 16;
+
+  // ---------- Game state ----------
+  let state = 'start'; // 'start' | 'playing' | 'paused' | 'gameover'
+  let ball, scrollOffset, forwardSpeed, chunksByIndex, highestChunkIndex, trail;
+  let particles = [];
+  let score = 0;
+
+  // ---------- Persistent best distance, kept separately per control mode ----------
+  const BEST_KEY_PREFIX = 'abyssSnapBestDistance_';
+  const LEGACY_BEST_KEY = 'abyssSnapBestDistance'; // from before modes existed
+  function loadBest(mode){
+    try{
+      const v = localStorage.getItem(BEST_KEY_PREFIX + mode);
+      const n = v ? parseInt(v, 10) : 0;
+      return isNaN(n) ? 0 : n;
+    } catch(e){ return 0; } // storage blocked (private mode, sandboxed preview, etc.)
+  }
+  function saveBest(mode, v){
+    try{ localStorage.setItem(BEST_KEY_PREFIX + mode, String(v)); }
+    catch(e){ /* storage unavailable here — best score just won't persist */ }
+  }
+  let bestScores = { tap: loadBest('tap'), hold: loadBest('hold') };
+  // one-time migration: old saves count toward Hold mode, since that was the only mode before
+  try{
+    const legacy = localStorage.getItem(LEGACY_BEST_KEY);
+    if(legacy){
+      const legacyN = parseInt(legacy, 10) || 0;
+      if(legacyN > bestScores.hold){
+        bestScores.hold = legacyN;
+        saveBest('hold', legacyN);
+      }
+      localStorage.removeItem(LEGACY_BEST_KEY);
+    }
+  } catch(e){ /* ignore */ }
+
+  let warningActive = false, warningPlayedFor = -1, squeezePassed = new Set();
+  let shakeTime = 0, shakeMag = 0;
+  let lastMilestone = 0;
+  let ballRadius = 14, normalGapRange = [0,0], squeezeGap = 0;
+  let flashDeath = 0;
+
+  function computeScaledSizes(){
+    ballRadius = Math.max(10, H * 0.017);
+    normalGapRange = [H*0.30, H*0.42];
+    const baseSqueezeGap = Math.max(ballRadius*2.5, H*0.105);
+    // Tap mode is inherently twitchier (instant full-toggle, no in-between), so its
+    // squeeze stretches are a bit more forgiving than Hold mode's.
+    squeezeGap = controlMode === 'tap' ? baseSqueezeGap * 1.3 : baseSqueezeGap;
+  }
+
+  function resetGame(){
+    computeScaledSizes();
+    ball = {
+      x: W * BALL_X_FRAC,
+      y: H / 2,
+      speedY: H*0.0082,
+      vy: H*0.0082, // idle/released state: falling, until the player holds
+      angle: 0
+    };
+    scrollOffset = 0;
+    forwardSpeed = Math.max(5.0, W*0.0053);
+    chunksByIndex = {};
+    highestChunkIndex = -1;
+    trail = [];
+    particles = [];
+    holding = false;
+    score = 0;
+    warningActive = false;
+    warningPlayedFor = -1;
+    squeezePassed = new Set();
+    shakeTime = 0; shakeMag = 0;
+    lastMilestone = 0;
+    flashDeath = 0;
+    ensureChunks();
+  }
+
+  // ---------- Procedural cave chunks ----------
+  function genChunk(index){
+    let isSqueeze = false;
+    if(index > 3){
+      const prev = chunksByIndex[index-1];
+      const prevWasSqueeze = prev && prev.isSqueeze;
+      if(!prevWasSqueeze){
+        isSqueeze = Math.random() < SQUEEZE_CHANCE;
+      }
+    }
+    const gap = isSqueeze
+      ? squeezeGap
+      : normalGapRange[0] + Math.random()*(normalGapRange[1]-normalGapRange[0]);
+    const chunk = { index, isSqueeze, gap, warnAhead:false };
+    chunksByIndex[index] = chunk;
+    if(index > 0 && chunksByIndex[index-1]){
+      chunksByIndex[index-1].warnAhead = isSqueeze;
+    }
+    highestChunkIndex = index;
+    return chunk;
+  }
+
+  function ensureChunks(){
+    const rightEdgeWorldX = scrollOffset + W + CHUNK_LENGTH;
+    while(highestChunkIndex * CHUNK_LENGTH < rightEdgeWorldX){
+      genChunk(highestChunkIndex + 1);
+    }
+    // cleanup old chunks far behind
+    const minKeepIndex = Math.floor(scrollOffset / CHUNK_LENGTH) - 2;
+    for(const key in chunksByIndex){
+      if(Number(key) < minKeepIndex) delete chunksByIndex[key];
+    }
+  }
+
+  function getChunkAt(idx){
+    if(!chunksByIndex[idx]) genChunk(idx);
+    return chunksByIndex[idx];
+  }
+
+  function smoothstep(t){ return t*t*(3-2*t); }
+
+  function centerAt(worldX){
+    const a1 = H*0.09, a2 = H*0.05;
+    return H/2 + a1*Math.sin(worldX*0.0021) + a2*Math.sin(worldX*0.0046 + 1.7);
+  }
+
+  function gapAt(worldX){
+    const idx = Math.floor(worldX / CHUNK_LENGTH);
+    const c0 = getChunkAt(idx);
+    const c1 = getChunkAt(idx+1);
+    const t = (worldX - idx*CHUNK_LENGTH) / CHUNK_LENGTH;
+    const st = smoothstep(Math.max(0, Math.min(1,t)));
+    return c0.gap + (c1.gap - c0.gap) * st;
+  }
+
+  function stateAt(worldX){
+    // 0 normal, 1 warning, 2 squeeze
+    const idx = Math.floor(worldX / CHUNK_LENGTH);
+    const c = getChunkAt(idx);
+    const t = (worldX - idx*CHUNK_LENGTH) / CHUNK_LENGTH;
+    if(c.isSqueeze) return {s:2, chunkIndex:idx};
+    if(c.warnAhead && t > 0.55) return {s:1, chunkIndex:idx};
+    return {s:0, chunkIndex:idx};
+  }
+
+  function wallsAt(worldX){
+    const gap = gapAt(worldX);
+    const half = gap/2;
+    let center = centerAt(worldX);
+    const minC = MARGIN + half;
+    const maxC = H - MARGIN - half;
+    if(minC <= maxC){
+      center = Math.max(minC, Math.min(maxC, center));
+    }
+    return { top: center - half, bottom: center + half };
+  }
+
+  // ---------- Input ----------
+  let holding = false;
+  const MODE_KEY = 'abyssSnapControlMode';
+  let controlMode = 'hold'; // 'hold' or 'tap'
+  try{
+    const saved = localStorage.getItem(MODE_KEY);
+    if(saved === 'tap' || saved === 'hold') controlMode = saved;
+  } catch(e){ /* storage unavailable, default stands */ }
+
+  function turnFX(){
+    playTurn();
+    // brief squash/stretch pulse
+    ball.turnPulse = 1;
+    for(let i=0;i<6;i++){
+      particles.push({
+        x: ball.x, y: ball.y,
+        vx: (Math.random()-0.5)*2, vy: (Math.random()-0.5)*2,
+        life: 0.35, maxLife:0.35, r: 2+Math.random()*2, color: 'bio'
+      });
+    }
+  }
+
+  function setHold(isHolding){
+    if(state !== 'playing') { holding = isHolding; return; }
+    if(holding === isHolding) return;
+    holding = isHolding;
+    ball.vy = holding ? -ball.speedY : ball.speedY;
+    turnFX();
+  }
+
+  function tapFlip(){
+    if(state !== 'playing') return;
+    ball.vy = -ball.vy;
+    turnFX();
+  }
+
+  function handlePointerDown(e){
+    if(e.target && (e.target.tagName === 'BUTTON')) return;
+    if(state === 'playing'){ e.preventDefault && e.preventDefault(); }
+    if(controlMode === 'tap') tapFlip();
+    else setHold(true);
+  }
+  function handlePointerUp(e){
+    if(controlMode === 'hold') setHold(false);
+  }
+  canvas.addEventListener('pointerdown', handlePointerDown);
+  document.addEventListener('contextmenu', (e)=> e.preventDefault());
+  document.addEventListener('selectstart', (e)=> e.preventDefault());
+  // iOS's long-press text-selection magnifier is driven by raw touch events, not
+  // pointer events — preventDefault on pointerdown alone doesn't stop it. Blocking
+  // touchstart/touchmove directly (with passive:false so preventDefault works) does.
+  canvas.addEventListener('touchstart', (e)=> e.preventDefault(), {passive:false});
+  canvas.addEventListener('touchmove', (e)=> e.preventDefault(), {passive:false});
+  window.addEventListener('pointerup', handlePointerUp);
+  window.addEventListener('pointercancel', handlePointerUp);
+  window.addEventListener('blur', handlePointerUp);
+
+  window.addEventListener('keydown', (e)=>{
+    if(e.code === 'Space'){
+      e.preventDefault();
+      if(!e.repeat){
+        if(controlMode === 'tap') tapFlip();
+        else setHold(true);
+      }
+    }
+    if(e.code === 'Escape'){
+      if(state === 'playing') pauseGame();
+      else if(state === 'paused') resumeGame();
+    }
+  });
+  window.addEventListener('keyup', (e)=>{
+    if(e.code === 'Space'){
+      e.preventDefault();
+      if(controlMode === 'hold') setHold(false);
+    }
+  });
+
+  // ---------- Control mode picker (start screen) ----------
+  const modeTapBtn = document.getElementById('modeTapBtn');
+  const modeHoldBtn = document.getElementById('modeHoldBtn');
+  const tapBestLabel = document.getElementById('tapBestLabel');
+  const holdBestLabel = document.getElementById('holdBestLabel');
+  function refreshModeButtons(){
+    modeTapBtn.classList.toggle('selected', controlMode === 'tap');
+    modeHoldBtn.classList.toggle('selected', controlMode === 'hold');
+    tapBestLabel.textContent = 'Best: ' + bestScores.tap + 'm';
+    holdBestLabel.textContent = 'Best: ' + bestScores.hold + 'm';
+  }
+  function chooseMode(mode){
+    controlMode = mode;
+    try{ localStorage.setItem(MODE_KEY, mode); } catch(e){ /* ignore */ }
+    refreshModeButtons();
+  }
+  modeTapBtn.addEventListener('click', ()=> chooseMode('tap'));
+  modeHoldBtn.addEventListener('click', ()=> chooseMode('hold'));
+  refreshModeButtons();
+
+  // ---------- UI wiring ----------
+  const startScreen = document.getElementById('startScreen');
+  const gameOverScreen = document.getElementById('gameOverScreen');
+  const pauseScreen = document.getElementById('pauseScreen');
+  const hud = document.getElementById('hud');
+  const scoreVal = document.getElementById('scoreVal');
+  const finalScoreEl = document.getElementById('finalScore');
+  const bestScoreEl = document.getElementById('bestScore');
+  const bestScoreLabel = document.getElementById('bestScoreLabel');
+  const muteBtn = document.getElementById('muteBtn');
+  const warningBanner = document.getElementById('warningBanner');
+
+  document.getElementById('startBtn').addEventListener('click', ()=>{
+    ensureAudio();
+    startGame();
+  });
+  document.getElementById('restartBtn').addEventListener('click', ()=>{
+    ensureAudio();
+    startGame();
+  });
+  document.getElementById('menuBtn').addEventListener('click', ()=>{
+    goToMenu();
+  });
+  document.getElementById('resumeBtn').addEventListener('click', resumeGame);
+  document.getElementById('quitBtn').addEventListener('click', goToMenu);
+  muteBtn.addEventListener('click', ()=>{
+    muted = !muted;
+    muteBtn.textContent = muted ? '🔇' : '🔊';
+  });
+
+  function startGame(){
+    resetGame();
+    state = 'playing';
+    startScreen.classList.add('hidden');
+    gameOverScreen.classList.add('hidden');
+    pauseScreen.classList.add('hidden');
+    hud.classList.remove('hidden');
+    warningBanner.classList.remove('show');
+  }
+
+  function goToMenu(){
+    state = 'start';
+    startScreen.classList.remove('hidden');
+    gameOverScreen.classList.add('hidden');
+    pauseScreen.classList.add('hidden');
+    hud.classList.add('hidden');
+    warningBanner.classList.remove('show');
+  }
+
+  function pauseGame(){
+    if(state !== 'playing') return;
+    state = 'paused';
+    pauseScreen.classList.remove('hidden');
+  }
+  function resumeGame(){
+    if(state !== 'paused') return;
+    state = 'playing';
+    pauseScreen.classList.add('hidden');
+  }
+
+  function endGame(){
+    state = 'gameover';
+    playCrash();
+    shakeTime = 0.35; shakeMag = 14;
+    flashDeath = 1;
+    if(score > bestScores[controlMode]){
+      bestScores[controlMode] = score;
+      saveBest(controlMode, score);
+    }
+    const modeBest = bestScores[controlMode];
+    setTimeout(()=>{
+      finalScoreEl.textContent = score;
+      bestScoreEl.textContent = modeBest;
+      bestScoreLabel.textContent = 'Best Distance (' + (controlMode === 'tap' ? 'Tap' : 'Hold') + ')';
+      if(score >= modeBest && score > 0){
+        finalScoreEl.classList.add('new-best');
+      } else {
+        finalScoreEl.classList.remove('new-best');
+      }
+      gameOverScreen.classList.remove('hidden');
+      hud.classList.add('hidden');
+      warningBanner.classList.remove('show');
+      refreshModeButtons();
+    }, 420);
+  }
+
+  // ---------- Main loop ----------
+  let lastT = performance.now();
+
+  function frame(now){
+    const dt = Math.min(0.033, (now - lastT)/1000);
+    lastT = now;
+    update(dt);
+    render(dt);
+    requestAnimationFrame(frame);
+  }
+
+  function update(dt){
+    if(state !== 'playing'){
+      // still drift particles/bg for ambience on menus
+      updateParticles(dt);
+      return;
+    }
+    const step = dt * 60; // normalize to ~60fps units
+
+    // difficulty ramp
+    const targetSpeed = Math.min(W*0.0053 + score*0.0012, W*0.011);
+    forwardSpeed += (targetSpeed - forwardSpeed) * 0.01 * step;
+
+    scrollOffset += forwardSpeed * step;
+    ball.y += ball.vy * step;
+
+    ensureChunks();
+
+    const worldXAtBall = scrollOffset + ball.x;
+    const walls = wallsAt(worldXAtBall);
+
+    // collision
+    if(ball.y - ballRadius <= walls.top || ball.y + ballRadius >= walls.bottom){
+      ball.y = Math.max(walls.top + ballRadius, Math.min(walls.bottom - ballRadius, ball.y));
+      endGame();
+    }
+
+    // warning banner + sound, based on state a bit ahead of ball for readability
+    const lookAheadX = worldXAtBall + W*0.18;
+    const st = stateAt(lookAheadX);
+    if(st.s === 1){
+      if(!warningActive){ warningActive = true; warningBanner.classList.add('show'); }
+      if(warningPlayedFor !== st.chunkIndex){ playWarning(); warningPlayedFor = st.chunkIndex; }
+    } else {
+      if(warningActive){ warningActive = false; warningBanner.classList.remove('show'); }
+    }
+    const stNow = stateAt(worldXAtBall);
+    if(stNow.s === 2 && !squeezePassed.has(stNow.chunkIndex)){
+      squeezePassed.add(stNow.chunkIndex);
+      playSqueezePass();
+    }
+
+    // trail
+    trail.push({x: ball.x, y: ball.y, life: 1});
+    if(trail.length > 40) trail.shift();
+    for(const p of trail){ p.x -= forwardSpeed*step; p.life -= 0.02*step; }
+    trail = trail.filter(p => p.life > 0);
+
+    if(ball.turnPulse){
+      ball.turnPulse -= 0.08*step;
+      if(ball.turnPulse < 0) ball.turnPulse = 0;
+    }
+
+    updateParticles(dt);
+
+    // score + milestone
+    score = Math.floor(scrollOffset / 10);
+    scoreVal.textContent = score;
+    if(score - lastMilestone >= 500){
+      lastMilestone = score - (score % 500);
+      playMilestone();
+      particles.push({x: ball.x, y: ball.y-30, life:1, maxLife:1, milestone:true, text:'+'+(score - (score%500) === 0 ? 500 : 500)});
+    }
+
+    if(shakeTime > 0) shakeTime -= dt;
+    if(flashDeath > 0) flashDeath -= dt*2;
+  }
+
+  function updateParticles(dt){
+    const step = dt*60;
+    for(const p of particles){
+      p.x += (p.vx||0)*step;
+      p.y += (p.vy||0)*step - (p.milestone? 0.4*step : 0);
+      p.life -= (p.milestone ? 0.012 : 0.05) * step;
+    }
+    particles = particles.filter(p=>p.life > 0);
+  }
+
+  // ---------- Rendering ----------
+  function drawBackground(t){
+    ctx.fillStyle = '#050b14';
+    ctx.fillRect(0,0,W,H);
+
+    // ambient drifting motes
+    const n = 40;
+    for(let i=0;i<n;i++){
+      const seed = i*97.13;
+      const x = ((seed*13 - (state==='playing'? scrollOffset*0.15 : t*6)) % (W+40) + (W+40)) % (W+40);
+      const y = (Math.sin(seed + t*0.15)*0.5+0.5) * H;
+      const r = 1 + (i%3)*0.6;
+      const alpha = 0.08 + 0.05*Math.sin(seed + t*0.6);
+      ctx.beginPath();
+      ctx.fillStyle = `rgba(77,232,216,${Math.max(0,alpha)})`;
+      ctx.arc(x,y,r,0,Math.PI*2);
+      ctx.fill();
+    }
+  }
+
+  function colorForState(s, pulse){
+    if(s === 2){
+      const g = 0.6 + 0.4*Math.sin(pulse*10);
+      return `rgba(255,56,96,${0.75+0.25*g})`;
+    }
+    if(s === 1){
+      const g = 0.6 + 0.4*Math.sin(pulse*8);
+      return `rgba(255,179,71,${0.7+0.3*g})`;
+    }
+    return 'rgba(77,232,216,0.85)';
+  }
+
+  function drawCave(t){
+    const STEP = 5;
+    const cols = Math.ceil(W/STEP)+1;
+    const tops = new Array(cols);
+    const bottoms = new Array(cols);
+    const states = new Array(cols);
+
+    for(let i=0;i<cols;i++){
+      const sx = i*STEP;
+      const wx = scrollOffset + sx;
+      const w = wallsAt(wx);
+      tops[i] = w.top;
+      bottoms[i] = w.bottom;
+      states[i] = state === 'playing' || state==='paused' ? stateAt(wx).s : 0;
+    }
+
+    // fill cave rock (dark) full width, single path each
+    ctx.beginPath();
+    ctx.moveTo(0,0);
+    for(let i=0;i<cols;i++) ctx.lineTo(i*STEP, tops[i]);
+    ctx.lineTo(W,0);
+    ctx.closePath();
+    ctx.fillStyle = '#0f2a3d';
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.moveTo(0,H);
+    for(let i=0;i<cols;i++) ctx.lineTo(i*STEP, bottoms[i]);
+    ctx.lineTo(W,H);
+    ctx.closePath();
+    ctx.fillStyle = '#0f2a3d';
+    ctx.fill();
+
+    // subtle inner shading near the edge
+    ctx.save();
+    ctx.globalAlpha = 0.35;
+    ctx.beginPath();
+    ctx.moveTo(0,0);
+    for(let i=0;i<cols;i++) ctx.lineTo(i*STEP, tops[i]);
+    ctx.lineTo(W,0);
+    ctx.closePath();
+    const gTop = ctx.createLinearGradient(0,0,0,H*0.4);
+    gTop.addColorStop(0,'rgba(0,0,0,0.5)');
+    gTop.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle = gTop;
+    ctx.fill();
+    ctx.restore();
+
+    // glowing edge line, colored per local state, drawn in contiguous runs
+    function drawEdge(arr){
+      let runStart = 0;
+      for(let i=1;i<=cols;i++){
+        if(i===cols || states[i] !== states[runStart]){
+          ctx.beginPath();
+          ctx.moveTo(runStart*STEP, arr[runStart]);
+          for(let j=runStart+1;j<i;j++) ctx.lineTo(j*STEP, arr[j]);
+          const col = colorForState(states[runStart], t);
+          ctx.strokeStyle = col;
+          ctx.lineWidth = states[runStart]===0 ? 2.5 : 3.5;
+          ctx.shadowColor = col;
+          ctx.shadowBlur = states[runStart]===0 ? 10 : 22;
+          ctx.stroke();
+          runStart = i;
+        }
+      }
+      ctx.shadowBlur = 0;
+    }
+    drawEdge(tops);
+    drawEdge(bottoms);
+  }
+
+  function drawTrail(){
+    for(let i=0;i<trail.length;i++){
+      const p = trail[i];
+      const alpha = Math.max(0, p.life) * 0.5;
+      const r = ballRadius * 0.5 * p.life;
+      ctx.beginPath();
+      ctx.fillStyle = `rgba(77,232,216,${alpha})`;
+      ctx.arc(p.x, p.y, r, 0, Math.PI*2);
+      ctx.fill();
+    }
+  }
+
+  function drawBall(){
+    const pulse = ball.turnPulse || 0;
+    const stretch = 1 + pulse*0.35;
+    const squash = 1 - pulse*0.25;
+
+    ctx.save();
+    ctx.translate(ball.x, ball.y);
+    const angle = Math.atan2(ball.vy, forwardSpeed*40);
+    ctx.rotate(angle*0.4);
+
+    ctx.beginPath();
+    ctx.fillStyle = 'rgba(77,232,216,0.25)';
+    ctx.shadowColor = '#4de8d8';
+    ctx.shadowBlur = 26;
+    ctx.ellipse(0,0, ballRadius*1.8*stretch, ballRadius*1.8*squash, 0, 0, Math.PI*2);
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.fillStyle = '#eafffb';
+    ctx.shadowBlur = 14;
+    ctx.ellipse(0,0, ballRadius*stretch, ballRadius*squash, 0, 0, Math.PI*2);
+    ctx.fill();
+
+    ctx.shadowBlur = 0;
+    ctx.restore();
+  }
+
+  function drawParticles(){
+    for(const p of particles){
+      if(p.milestone){
+        ctx.save();
+        ctx.globalAlpha = Math.max(0,p.life);
+        ctx.fillStyle = '#ffb347';
+        ctx.font = "700 16px 'Orbitron', sans-serif";
+        ctx.textAlign = 'center';
+        ctx.fillText(p.text, p.x, p.y);
+        ctx.restore();
+        continue;
+      }
+      ctx.beginPath();
+      ctx.fillStyle = `rgba(77,232,216,${Math.max(0,p.life/p.maxLife)})`;
+      ctx.arc(p.x, p.y, p.r||2, 0, Math.PI*2);
+      ctx.fill();
+    }
+  }
+
+  function render(dt){
+    ctx.save();
+    if(shakeTime > 0){
+      const m = shakeMag * (shakeTime/0.35);
+      ctx.translate((Math.random()-0.5)*m, (Math.random()-0.5)*m);
+    }
+    const t = performance.now()/1000;
+    drawBackground(t);
+    drawCave(t);
+    if(state === 'playing' || state === 'paused'){
+      drawTrail();
+      drawParticles();
+      drawBall();
+    }
+    if(flashDeath > 0){
+      ctx.fillStyle = `rgba(255,56,96,${Math.min(0.5,flashDeath*0.5)})`;
+      ctx.fillRect(0,0,W,H);
+    }
+    ctx.restore();
+  }
+
+  // ---------- Install as app (PWA) ----------
+  if('serviceWorker' in navigator){
+    window.addEventListener('load', ()=>{
+      navigator.serviceWorker.register('sw.js').catch(()=>{ /* fine if this fails, e.g. file:// preview */ });
+    });
+  }
+
+  // ---------- Init ----------
+  computeScaledSizes();
+  resetGame();
+  state = 'start';
+  requestAnimationFrame((t)=>{ lastT = t; requestAnimationFrame(frame); });
+
+})();
+</script>
+</body>
+</html>
